@@ -10,6 +10,7 @@ Gem::Specification.new do |s|
   s.files = [
     "README.txt",
     "lib/ebs_snapshot.rb",
+    "bin/ebs_snapshot",
     "test/test_ebs_snapshot.rb"
   ]
   s.has_rdoc = true 
