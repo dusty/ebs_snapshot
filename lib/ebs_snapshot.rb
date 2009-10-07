@@ -1,4 +1,4 @@
-require 'EC2'
+require 'AWS'
 require 'shell_command'
 require 'yaml'
 
@@ -76,7 +76,7 @@ class EbsSnapshot
     end
   end
   def ec2_connect
-    @ec2 = EC2::Base.new(
+    @ec2 = AWS::EC2::Base.new(
       :access_key_id => @config['global']['ec2_access_key'],
       :secret_access_key => @config['global']['ec2_secret_key']
     )
