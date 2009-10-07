@@ -42,7 +42,7 @@ class EbsSnapshot
       }
       puts output.inspect
     rescue StandardError => e
-      output => {
+      output = {
         :error => e.class
         :message => e.message
         :backtrace => e.backtrace
@@ -61,7 +61,7 @@ class EbsSnapshot
         :volume => snapshot['volume']
       }
     rescue StandardError => e
-      output => {
+      output = {
         :error => e.class
         :message => e.message
         :backtrace => e.backtrace

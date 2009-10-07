@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'rubygems'
-require 'ec2_snapshot'
+require 'ebs_snapshot'
 
 Ec2Snapshot.snapshot

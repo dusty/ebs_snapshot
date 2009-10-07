@@ -5,8 +5,8 @@ Gem::Specification.new do |s|
   s.email = "github@dusty.name" 
   s.homepage = "http://code.dusty.name" 
   s.platform = Gem::Platform::RUBY
-  s.summary = "Take snapshots of ebs volumes on EC2"
-  s.description = "Take snapshots of ebs volumes on EC2"
+  s.summary = "Take snapshots of EBS volumes on EC2"
+  s.description = "Take snapshots of EBS volumes on EC2"
   s.files = [
     "README.txt",
     "lib/ebs_snapshot.rb",
