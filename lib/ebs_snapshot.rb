@@ -33,6 +33,7 @@ class EbsSnapshot
       snap_out = take_snapshot(snapshot['device'],snapshot['volume'])
       unlock_db
       output = {
+        :status => "OK",
         :time => Time.now,
         :snapshot => snap_out["snapshotId"],
         :device => snapshot['device'],
@@ -43,8 +44,10 @@ class EbsSnapshot
       puts output.inspect
     rescue StandardError => e
       output = {
-        :error => e.class
-        :message => e.message
+        :status => "ERROR",
+        :time => Time.now,
+        :error => e.class,
+        :message => e.message,
         :backtrace => e.backtrace
       }
       puts output.inspect
@@ -55,6 +58,7 @@ class EbsSnapshot
     begin
       snap_out = take_snapshot(snapshot['device'],snapshot['volume'])
       output = {
+        :status => "OK",
         :time => Time.now,
         :snapshot => snap_out["snapshotId"],
         :device => snapshot['device'],
@@ -62,8 +66,9 @@ class EbsSnapshot
       }
     rescue StandardError => e
       output = {
-        :error => e.class
-        :message => e.message
+        :status => "ERROR",
+        :error => e.class,
+        :message => e.message,
         :backtrace => e.backtrace
       }
       puts output.inspect
