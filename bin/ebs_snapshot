@@ -3,4 +3,4 @@
 require 'rubygems'
 require 'ebs_snapshot'
 
-Ec2Snapshot.snapshot
+EbsSnapshot.snapshot
