@@ -16,7 +16,7 @@ Gem::Specification.new do |s|
   s.has_rdoc = true 
   s.extra_rdoc_files = ["README.txt"]
   s.executables = ['ebs_snapshot']
-  s.add_dependency('dusty-shell_command')
+  s.add_dependency('shell_command')
   s.add_dependency('amazon-ec2')
   s.rubyforge_project = "none"
 end
