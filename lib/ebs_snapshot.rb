@@ -3,7 +3,7 @@ require 'shell_command'
 require 'yaml'
 
 class EbsSnapshot
-  VERSION = '0.0.1'
+  VERSION = '0.0.2'
   attr_reader :config
   def self.snapshot
     ebs = EbsSnapshot.new
