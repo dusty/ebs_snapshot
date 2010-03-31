@@ -1,48 +1,30 @@
-= EbsSnapshot
+EbsSnapshot
 
-ebs_snapshot
+  Make snapshots of XFS file systems to EBS
+ 
+ 
+Installation
 
-== DESCRIPTION:
+  gem install ebs_snapshot-x.x.x.gem
 
-ebs_snapshot
+Configuration
 
-== FEATURES/PROBLEMS:
+  # /etc/ebs_snapshot.yml  
+  # make db true if this is a database volume
+  global:
+    ec2_access_key: xxxxxxxxxxxxxx
+    ec2_secret_key: xxxxxxxxxxxxxx
+    db_user: user
+    db_pass: password
 
-ebs_snapshot
+  snapshots:
+    - path: /mnt/dbvolume
+      volume: vol-xxxxxxx
+      db: true
+    - path: /mnt/othervolume
+      volume: vol-xxxxxxx
+  
+Usage
 
-== SYNOPSIS:
-
-ebs_snapshot
-
-== REQUIREMENTS:
-
-ebs_snapshot
-
-== INSTALL:
-
-ebs_snapshot
-
-== LICENSE:
-
-(The MIT License)
-
-Copyright (c) 2008 FIX
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-'Software'), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+  ebs_snapshot
+  
