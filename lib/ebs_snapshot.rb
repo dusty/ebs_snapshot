@@ -16,7 +16,6 @@ class EbsSnapshot
     @config   = YAML::load(File.open('/etc/ebs_snapshot.yml'))
     @suspend  = ShellCommand.new("/usr/sbin/xfs_freeze -f")
     @resume   = ShellCommand.new("/usr/sbin/xfs_freeze -u")
-    @hostname = ShellCommand.new("/bin/hostname")
     ec2_connect
   end
   
