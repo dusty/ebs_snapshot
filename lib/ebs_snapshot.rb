@@ -34,13 +34,9 @@ class EbsSnapshot
     begin
       db_connect
       master_status = lock_db
-      description = <<-EOD
-DB backup on #{hostname} at #{timestamp}
- volume: #{volume}
- path: #{path}
- master_file: #{master_status[:File]}
- master_pos: #{master_status[:Position]}
-      EOD
+      file = master_status[:File]
+      pos  = master_status[:Position]
+      description = "#{hostname}:#{path} (#{file}, #{pos})"
       snap_out = take_snapshot(path,volume,description)
       unlock_db
       snap_out["snapshotId"]
@@ -53,11 +49,7 @@ DB backup on #{hostname} at #{timestamp}
   
   def fs_snapshot(path,volume)
     begin
-      description = <<-EOD
-FS backup on #{hostname} at #{timestamp}
- volume: #{volume}
- path: #{path}
-      EOD
+      description = "#{hostname}:#{path}"
       snap_out = take_snapshot(path,volume,description)
       snap_out["snapshotId"]
     rescue StandardError => e
