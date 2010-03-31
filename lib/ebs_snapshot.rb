@@ -43,8 +43,10 @@ DB backup on #{hostname} at #{timestamp}
  master_pos: #{master_status[:Position]}
       EOD
       snap_out = take_snapshot(path,volume,description)
+      unlock_db
       snap_out["snapshotId"]
     rescue StandardError => e
+      unlock_db
       puts e.message
       exit(3)
     end
@@ -92,7 +94,7 @@ FS backup on #{hostname} at #{timestamp}
       snapshot
     rescue StandardError => e
       resume_filesystem(path)
-      raise e
+      raise
     end
   end
   
