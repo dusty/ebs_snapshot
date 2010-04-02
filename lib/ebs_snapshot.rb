@@ -67,7 +67,6 @@ class EbsSnapshot
       ec2.create_snapshot(:volume_id => volume, :description => description)
     ensure
       thaw_filesystem(type,path)
-      raise
     end
   end
   
