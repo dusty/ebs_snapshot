@@ -38,25 +38,15 @@ class EbsSnapshot
     begin
       file, position = lock_mysql
       description = "#{hostname}:#{path} (#{file}, #{position})"
-      snap = take_snapshot(type,path,volume,description)
+      take_snapshot(type,path,volume,description)
+    ensure
       unlock_mysql
-      snap['snapshotId']
-    rescue StandardError => e
-      unlock_mysql
-      puts e.message
-      exit(3)
     end
   end
   
   def file_snapshot(type,path,volume)
-    begin
-      description = "#{hostname}:#{path}"
-      snap = take_snapshot(type,path,volume,description)
-      snap['snapshotId']
-    rescue StandardError => e
-      puts e.message
-      exit(3)
-    end
+    description = "#{hostname}:#{path}"
+    snap = take_snapshot(type,path,volume,description)
   end
 
   protected
@@ -71,7 +61,7 @@ class EbsSnapshot
   end
   
   def freeze_filesystem(type,path)
-    sync   = ShellCommand.new("/bin/sync")
+    sync = ShellCommand.new("/bin/sync")
     raise(StandardError, sync.stderr) unless sync.popen
     freeze = case type
     when "xfs"
@@ -79,9 +69,7 @@ class EbsSnapshot
     when "lvm"
       ShellCommand.new("/sbin/dmsetup suspend")
     end
-    if freeze
-      raise(StandardError, freeze.stderr) unless freeze.popen(path)
-    end
+    raise(StandardError, freeze.stderr) unless (!freeze || freeze.popen(path))
   end
   
   def thaw_filesystem(type,path)
@@ -91,9 +79,7 @@ class EbsSnapshot
     when "lvm"
       ShellCommand.new("/sbin/dmsetup resume")
     end
-    if thaw
-      raise(StandardError, thaw.stderr) unless thaw.popen(path)
-    end
+    raise(StandardError, thaw.stderr) unless (!thaw || thaw.popen(path))
   end
   
   def mysql_connect
