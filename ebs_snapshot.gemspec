@@ -1,6 +1,6 @@
 Gem::Specification.new do |s| 
   s.name = "ebs_snapshot" 
-  s.version = "0.0.3" 
+  s.version = "0.0.4" 
   s.author = "Dusty Doris" 
   s.email = "github@dusty.name" 
   s.homepage = "http://code.dusty.name" 
