@@ -14,6 +14,7 @@ Configuration
   global:
     ec2_access_key: xxxxxxxxxxxxxx
     ec2_secret_key: xxxxxxxxxxxxxx
+    hostname: myhostname
     db_user: user
     db_pass: password
 

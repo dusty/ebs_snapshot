@@ -5,7 +5,7 @@ require 'socket'
 
 class EbsSnapshot
   VERSION = '0.0.2'
-  attr_reader :config
+  attr_reader :config, :ec2, :mysql
   
   def self.snapshot
     new.snapshot
@@ -13,129 +13,146 @@ class EbsSnapshot
   
   def initialize
     check_config
-    @config   = YAML::load(File.open('/etc/ebs_snapshot.yml'))
-    @suspend  = ShellCommand.new("/usr/sbin/xfs_freeze -f")
-    @resume   = ShellCommand.new("/usr/sbin/xfs_freeze -u")
+    @config = YAML::load(File.open('/etc/ebs_snapshot.yml'))
     ec2_connect
   end
   
+  def hostname
+    config['aws']['hostname'] ||= Socket.gethostname
+  end
+  
   def snapshot
-    self.config['snapshots'].each do |snapshot|
-      if snapshot['db']
-        self.db_snapshot(snapshot['path'],snapshot['volume'])
+    self.config['snapshots'].each do |volume, args|
+      path = args["path"]
+      type = args["type"]
+      case type
+      when "mysql"
+        mysql_snapshot(path,volume)
+      when "file"
+        file_snapshot(path,volume)
       else
-        self.fs_snapshot(snapshot['path'],snapshot['volume'])
+        raise(StandardError, "Volume type #{type} not recognized")
       end
     end
   end
   
-  def db_snapshot(path,volume)
+  def mysql_snapshot(path,volume)
     require 'sequel' unless Object.const_defined?('Sequel')
     begin
-      db_connect
-      master_status = lock_db
-      file = master_status[:File]
-      pos  = master_status[:Position]
-      description = "#{hostname}:#{path} (#{file}, #{pos})"
-      snap_out = take_snapshot(path,volume,description)
-      unlock_db
-      snap_out["snapshotId"]
+      mysql_connect unless mysql
+      file, position = lock_mysql
+      description = "#{hostname}:#{path} (#{file}, #{position})"
+      snap = take_snapshot(path,volume,description)
+      unlock_mysql
+      snap['snapshotId']
     rescue StandardError => e
-      unlock_db
+      unlock_mysql
       puts e.message
       exit(3)
     end
   end
   
-  def fs_snapshot(path,volume)
+  def file_snapshot(path,volume)
     begin
       description = "#{hostname}:#{path}"
-      snap_out = take_snapshot(path,volume,description)
-      snap_out["snapshotId"]
+      snap = take_snapshot(path,volume,description)
+      snap['snapshotId']
     rescue StandardError => e
       puts e.message
       exit(3)
     end
   end
-  
-  def ec2_connect
-    @ec2 = AWS::EC2::Base.new(
-      :access_key_id => @config['global']['ec2_access_key'],
-      :secret_access_key => @config['global']['ec2_secret_key']
-    )
-  end
-  
-  def db_connect
-    auth = [
-      @config['global']['db_user'],
-      @config['global']['db_pass']
-    ].join(':')
-    @db = Sequel.connect(
-      "mysql://#{auth}@localhost", :single_threaded => true
-    )
-  end
+
+  protected
   
   def take_snapshot(path,volume,description)
     begin
-      suspend_filesystem(path)
-      snapshot = @ec2.create_snapshot(
+      freeze_filesystem(path)
+      snapshot = ec2.create_snapshot(
         :volume_id => volume, :description => description
       )
-      resume_filesystem(path)
+      thaw_filesystem(path)
       snapshot
     rescue StandardError => e
-      resume_filesystem(path)
+      thaw_filesystem(path)
       raise
     end
   end
   
-  def timestamp
-    @timestamp ||= Time.now.strftime("%Y-%m-%d %H:%M:%S")
+  def freeze_filesystem(path)
+    sync_command.popen
+    raise(StandardError, freeze_cmd.stderr) unless freeze_cmd.popen(path)
   end
   
-  def hostname
-    @hostname ||= Socket.gethostname
+  def thaw_filesystem(path)
+    raise(StandardError, thaw_cmd.stderr) unless thaw_cmd.popen(path)
   end
   
-  def suspend_filesystem(path)
-    raise(StandardError, @suspend.stderr) unless @suspend.popen(path)
+  def lock_mysql
+    mysql['SLAVE STOP'].first
+    mysql['FLUSH TABLES WITH READ LOCK'].first
+    status = mysql['SHOW MASTER STATUS'].first
+    [status[:File], status[:Position]]
   end
   
-  def resume_filesystem(path)
-    raise(StandardError, @resume.stderr) unless @resume.popen(path)
+  def unlock_mysql
+    mysql['UNLOCK TABLES'].first
+    mysql['SLAVE START'].first
   end
   
-  def lock_db
-    @db['SLAVE STOP'].first
-    @db['FLUSH TABLES WITH READ LOCK'].first
-    @db['SHOW MASTER STATUS'].first
+  def freeze_cmd
+    ShellCommand.new("/usr/sbin/xfs_freeze -f")
   end
   
-  def unlock_db
-    @db['UNLOCK TABLES'].first
-    @db['SLAVE START'].first
+  def unfreeze_cmd
+    ShellCommand.new("/usr/sbin/xfs_freeze -u")
   end
   
-  protected
+  def sync_cmd
+    ShellCommand.new("/bin/sync")
+  end
+  
+  def ec2_connect
+    @ec2 = AWS::EC2::Base.new(
+      :access_key_id => config['aws']['access_key'],
+      :secret_access_key => config['aws']['secret_key']
+    )
+  end
+  
+  def mysql_connect
+    @mysql = Sequel.connect(
+      config['mysql'].update(:single_threaded => true, :adapter => 'mysql')
+    )
+  end
+  
   def check_config
     unless File.exists?('/etc/ebs_snapshot.yml')
       puts <<-EOD
 \n\n** Configuration file /etc/ebs_snapshot.yml does not exist
 
 # example /etc/ebs_snapshot.yml
-# make db true if this is a database volume
-global:
-  ec2_access_key: xxxxxxxxxxxxxx
-  ec2_secret_key: xxxxxxxxxxxxxx
-  db_user: user
-  db_pass: password
 
+# REQUIRED
+# will use system hostname if not present
+aws:
+  access_key: xxxxxxxxxxxxxx
+  secret_key: xxxxxxxxxxxxxx
+  hostname: myhostname
+
+# database authentication information
+mysql:
+  user: myuser
+  password: mypassword
+
+# set type to mysql if a mysql database volume
+# set type to file if a regular filesystem
 snapshots:
-  - path: /mnt/dbvolume
-    volume: vol-xxxxxxx
-    db: true
-  - path: /mnt/othervolume
-    volume: vol-xxxxxxx
+  vol-xxxxxxx:
+    path: /mnt/dbvolume
+    type: mysql
+  vol-yyyyyyy:
+    path: /mnt/othervolume
+    type: file
 \n\n
 EOD
       exit(3)
