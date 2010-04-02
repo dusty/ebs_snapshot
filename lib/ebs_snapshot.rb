@@ -110,31 +110,43 @@ class EbsSnapshot
   def check_config
     unless File.exists?('/etc/ebs_snapshot.yml')
       puts <<-EOD
-\n\n** Configuration file /etc/ebs_snapshot.yml does not exist
 
-# example /etc/ebs_snapshot.yml
+** Configuration file /etc/ebs_snapshot.yml does not exist
 
-# REQUIRED
-# will use system hostname if not present
+##
+# /etc/ebs_snapshot.yml
+
+##
+# aws authentication
+#
+# hostname you want to display in snapshot description
 aws:
   access_key: xxxxxxxxxxxxxx
   secret_key: xxxxxxxxxxxxxx
   hostname: myhostname
 
+##
 # mysql authentication information
 mysql:
   user: myuser
   password: mypassword
 
+##
+# Snapshots
+#
 # set db to mysql if a mysql database volume
+#
 # set fs to xfs or lvm filesystem for freezing
+#
+# set path to mount point for xfs
+# set path to lvm mapper for lvm
 snapshots:
   vol-xxxxxxx:
     path: /mnt/dbvolume
     fs: xfs
     db: mysql
   vol-yyyyyyy:
-    path: /mnt/othervolume
+    path: /dev/mapper/ebs-othervolume
     fs: lvm
 
 EOD

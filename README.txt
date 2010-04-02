@@ -9,21 +9,42 @@ Installation
 
 Configuration
 
-  # /etc/ebs_snapshot.yml  
-  # make db true if this is a database volume
-  global:
-    ec2_access_key: xxxxxxxxxxxxxx
-    ec2_secret_key: xxxxxxxxxxxxxx
-    hostname: myhostname
-    db_user: user
-    db_pass: password
+  ##
+  # /etc/ebs_snapshot.yml
 
+  ##
+  # aws authentication
+  #
+  # hostname you want to display in snapshot description
+  aws:
+    access_key: xxxxxxxxxxxxxx
+    secret_key: xxxxxxxxxxxxxx
+    hostname: myhostname
+
+  ##
+  # mysql authentication information
+  mysql:
+    user: myuser
+    password: mypassword
+
+  ##
+  # Snapshots
+  #
+  # set db to mysql if a mysql database volume
+  #
+  # set fs to xfs or lvm filesystem for freezing
+  #
+  # set path to mount point for xfs
+  # set path to lvm mapper for lvm
   snapshots:
-    - path: /mnt/dbvolume
-      volume: vol-xxxxxxx
-      db: true
-    - path: /mnt/othervolume
-      volume: vol-xxxxxxx
+    vol-xxxxxxx:
+      path: /mnt/dbvolume
+      fs: xfs
+      db: mysql
+    vol-yyyyyyy:
+      path: /dev/mapper/ebs-othervolume
+      fs: lvm
+
   
 Usage
 
