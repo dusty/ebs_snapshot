@@ -89,7 +89,6 @@ class EbsSnapshot
   end
   
   def lock_mysql
-    mysql['SLAVE STOP'].first
     mysql['FLUSH TABLES WITH READ LOCK'].first
     status = mysql['SHOW MASTER STATUS'].first
     [status[:File], status[:Position]]
@@ -97,7 +96,6 @@ class EbsSnapshot
   
   def unlock_mysql
     mysql['UNLOCK TABLES'].first
-    mysql['SLAVE START'].first
   end
   
   def ec2_connect
