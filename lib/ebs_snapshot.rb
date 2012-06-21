@@ -1,154 +1,161 @@
-require 'AWS'
-require 'shell_command'
-require 'yaml'
-require 'socket'
+require "ebs_snapshot/version"
+require "ebs_snapshot/shell_command"
+require "AWS"
+require "socket"
 
-class EbsSnapshot
-  VERSION = '0.0.4'
-  attr_reader :config, :ec2, :mysql
-  
-  def self.snapshot
-    new.snapshot
-  end
-  
-  def initialize
-    check_config
-    @config = YAML::load(File.open('/etc/ebs_snapshot.yml'))
-    ec2_connect
-  end
-  
-  def hostname
-    config['aws']['hostname'] ||= Socket.gethostname
-  end
-  
-  def snapshot
-    self.config['snapshots'].each do |volume, args|
-      case args["db"]
-      when "mysql"
-        mysql_snapshot(args["fs"],args["path"],volume)
-      else
-        file_snapshot(args["fs"],args["path"],volume)
+module EbsSnapshot
+
+  class Base
+
+    attr_reader :volume, :mysql, :aws, :hostname, :db
+
+    def initialize(args={})
+      @volume   = Volume.new(args[:volume])
+      @mysql    = Mysql.new(args[:mysql]) if args[:mysql]
+      @aws      = Aws.new(args[:aws])
+      @hostname = args[:hostname] || Socket.gethostname
+      @db       = args[:db] ? args[:db].to_sym : nil
+    end
+
+    def snapshot
+      (db == :mysql) ? mysql_snapshot : file_snapshot
+    end
+
+    def mysql_snapshot
+      require 'mysql2'
+      begin
+        file, position = mysql.lock
+        description = "#{hostname}:#{volume.path} (#{file}, #{position})"
+        volume.freeze
+        aws.snapshot(volume.volume_id, description)
+      rescue StandardError => e
+        puts "ERROR: #{e.message}"
+        raise
+      ensure
+        volume.thaw
+        mysql.unlock
       end
     end
-  end
-  
-  def mysql_snapshot(type,path,volume)
-    require 'sequel' unless defined?(Sequel)
-    mysql_connect unless mysql
-    begin
-      file, position = lock_mysql
-      description = "#{hostname}:#{path} (#{file}, #{position})"
-      take_snapshot(type,path,volume,description)
-    ensure
-      unlock_mysql
+
+    def file_snapshot
+      begin
+        description = "#{hostname}:#{volume.path}"
+        volume.freeze
+        aws.snapshot(volume.volume_id, description)
+      rescue StandardError => e
+        puts "ERROR: #{e.message}"
+        raise
+      ensure
+        volume.thaw
+      end
     end
-  end
-  
-  def file_snapshot(type,path,volume)
-    description = "#{hostname}:#{path}"
-    snap = take_snapshot(type,path,volume,description)
+
   end
 
-  protected
-  
-  def take_snapshot(type,path,volume,description)
-    begin
-      freeze_filesystem(type,path)
-      ec2.create_snapshot(:volume_id => volume, :description => description)
-    ensure
-      thaw_filesystem(type,path)
+  class Volume
+
+    attr_reader :volume_id, :path, :filesystem
+
+    def initialize(args={})
+      @volume_id  = args[:volume_id]
+      @filesystem = args[:filesystem] ? args[:filesystem].to_sym : nil
+      @path       = args[:path]
+      check_config
     end
-  end
-  
-  def freeze_filesystem(type,path)
-    sync = ShellCommand.new("/bin/sync")
-    raise(StandardError, sync.stderr) unless sync.popen
-    freeze = case type
-    when "xfs"
-      ShellCommand.new("/usr/sbin/xfs_freeze -f")
-    when "lvm"
-      ShellCommand.new("/sbin/dmsetup suspend")
+
+    def freeze?
+      filesystem == :xfs || :lvm
     end
-    raise(StandardError, freeze.stderr) unless (!freeze || freeze.popen(path))
-  end
-  
-  def thaw_filesystem(type,path)
-    thaw = case type
-    when "xfs"
-      ShellCommand.new("/usr/sbin/xfs_freeze -u")
-    when "lvm"
-      ShellCommand.new("/sbin/dmsetup resume")
+
+    def freeze
+      return unless freeze?
+      sync = ShellCommand.new("/bin/sync")
+      raise(StandardError, sync.stderr) unless sync.popen
+      command = ShellCommand.new(freeze_command)
+      raise(StandardError, command.stderr) unless command.popen(path)
     end
-    raise(StandardError, thaw.stderr) unless (!thaw || thaw.popen(path))
-  end
-  
-  def mysql_connect
-    @mysql = Sequel.connect(
-      config['mysql'].update(:single_threaded => true, :adapter => 'mysql')
-    )
-  end
-  
-  def lock_mysql
-    mysql['FLUSH TABLES WITH READ LOCK'].first
-    status = mysql['SHOW MASTER STATUS'].first
-    [status[:File], status[:Position]]
-  end
-  
-  def unlock_mysql
-    mysql['UNLOCK TABLES'].first
-  end
-  
-  def ec2_connect
-    @ec2 = AWS::EC2::Base.new(
-      :access_key_id => config['aws']['access_key'],
-      :secret_access_key => config['aws']['secret_key']
-    )
-  end
-  
-  def check_config
-    unless File.exists?('/etc/ebs_snapshot.yml')
-      puts <<-EOD
 
-** Configuration file /etc/ebs_snapshot.yml does not exist
-
-##
-# /etc/ebs_snapshot.yml
-
-##
-# aws authentication
-#
-# hostname you want to display in snapshot description
-aws:
-  access_key: xxxxxxxxxxxxxx
-  secret_key: xxxxxxxxxxxxxx
-  hostname: myhostname
-
-##
-# mysql authentication information
-mysql:
-  user: myuser
-  password: mypassword
-
-##
-# Snapshots
-#
-# set db to mysql if a mysql database volume
-#
-# set fs to xfs or lvm filesystem for freezing
-#
-# set path to mount point for xfs
-# set path to lvm mapper for lvm
-snapshots:
-  vol-xxxxxxx:
-    path: /mnt/dbvolume
-    fs: xfs
-    db: mysql
-  vol-yyyyyyy:
-    path: /dev/mapper/ebs-othervolume
-    fs: lvm
-
-EOD
-      exit(3)
+    def thaw
+      return unless freeze?
+      command = ShellCommand.new(thaw_command)
+      raise(StandardError, command.stderr) unless command.popen(path)
     end
+
+    protected
+
+    def freeze_command
+      case filesystem
+      when :xfs
+        "/usr/sbin/xfs_freeze -f"
+      when :lvm
+        "/sbin/dmsetup suspend"
+      end
+    end
+
+    def thaw_command
+      case filesystem
+      when :xfs
+        "/usr/sbin/xfs_freeze -u"
+      when :lvm
+        "/sbin/dmsetup resume"
+      end
+    end
+
+    def check_config
+      raise(StandardError, "VolumeID and Path are required") unless volume_id && path
+      raise(StandardError, "Path #{path} does not exist") unless File.exists?(path)
+    end
+
   end
+
+  class Mysql
+
+    attr_reader :username, :password, :host, :port
+
+    def initialize(args={})
+      @username = args[:username]
+      @password = args[:password]
+      @host     = args[:host] || '127.0.0.1'
+      @port     = args[:port] || 3306
+    end
+
+    def connection
+      @db ||= Mysql2::Client.new(
+        :username => username, :password => password, :host => host, :port => port, :reconnect => true
+      )
+    end
+
+    def lock
+      connection.query('FLUSH TABLES WITH READ LOCK')
+      status = connection.query('SHOW MASTER STATUS').first
+      status ? [status['File'], status['Position']] : ['empty','empty']
+    end
+
+    def unlock
+      connection.query('UNLOCK TABLES')
+    end
+
+  end
+
+  class Aws
+
+    attr_reader :access_key, :secret_key
+
+    def initialize(args={})
+      @access_key = args[:access_key] || ENV['AMAZON_ACCESS_KEY_ID']
+      @secret_key = args[:secret_key] || ENV['AMAZON_SECRET_ACCESS_KEY']
+    end
+
+    def connection
+      @aws ||= ::AWS::EC2::Base.new(
+        :access_key_id => access_key, :secret_access_key => secret_key
+      )
+    end
+
+    def snapshot(volume_id,description)
+      connection.create_snapshot(:volume_id => volume_id, :description => description)
+    end
+
+  end
+
 end

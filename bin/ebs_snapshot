@@ -1,6 +1,126 @@
 #!/usr/bin/env ruby
-
-require 'rubygems'
 require 'ebs_snapshot'
+require 'optparse'
 
-EbsSnapshot.snapshot
+def send_error(message)
+  puts @opts
+  puts ""
+  puts "ERROR: #{message}"
+  puts ""
+  exit(1)
+end
+
+@options = {}
+@opts =OptionParser.new
+
+@opts.banner = "Usage: ebs_snapshot [options]
+   eg: ebs_snapshot -i vol-XXXXXX -m /dev/ebs/ebsvol -f lvm -d mysql -u root
+       ebs_snapshot -i vol-YYYYYY -m /mnt/ebsvol -f xfs"
+
+@opts.separator ""
+@opts.separator "Required volume arguments"
+
+@opts.on(
+  "-m", "--path PATH", "Path to lvm device or mount point (/mnt/ebsvol)"
+) { |value| @options[:path]= value }
+
+@opts.on(
+  "-i", "--volume VOLUME", "ID of EBS Volume (vol-XXXXXX)"
+) { |value| @options[:volume] = value }
+
+@opts.on(
+  "-f", "--filesystem FILESYSTEM", [:lvm, :xfs], "Type of filesystem to freeze/suspend (xfs|lvm)"
+) { |value| @options[:filesystem] = value }
+
+@opts.separator ""
+@opts.separator "Informational arguments, used in the snapshot description"
+
+@opts.on(
+  '-H', "--hostname HOSTNAME", "Hostname of the machine with the volume"
+) { |value| @options[:hostname] = value }
+
+@opts.separator ""
+@opts.separator "AWS Identifications, required unless environmental variables set"
+
+@opts.on(
+  "-k", "--key KEY", "AWS Access Key (AMAZON_ACCESS_KEY_ID)"
+) { |value| @options[:access_key] = value }
+
+@opts.on(
+  "-s", "--secret SECRET", "AWS Secret Access Key (AMAZON_SECRET_ACCESS_KEY)"
+) { |value| @options[:secret_key] = value }
+
+@opts.separator ""
+@opts.separator "Database information, required if snapshoting a mysql database volume"
+
+@opts.on(
+  '-d', "--database DATABASE", [:mysql], "Database type (mysql)"
+) { |value| @options[:database] = value }
+
+@opts.on(
+  "-u", "--username USERNAME", "Database username"
+) { |value| @options[:username] = value }
+
+@opts.on(
+  "-p", "--password PASSWORD", "Database password"
+) { |value| @options[:password] = value }
+
+@opts.on(
+  "-t", "--host HOST", "Database host"
+) { |value| @options[:host] = value }
+
+@opts.on(
+  "-P", "--port PORT", "Database port"
+) { |value| @options[:port] = value }
+
+@opts.on_tail("-h", "--help", "Show Command Help") do
+  puts @opts
+  puts ""
+  exit(1)
+end
+
+begin
+  @opts.parse!
+rescue StandardError => e
+  send_error e.message
+end
+
+@options[:access_key] ||= ENV['AMAZON_ACCESS_KEY_ID']
+@options[:secret_key] ||= ENV['AMAZON_SECRET_ACCESS_KEY']
+
+unless @options[:access_key] && @options[:secret_key]
+  send_error "Missing Arguments: --key and --secret are required
+ NOTE: AMAZON_ACCESS_KEY_ID and AMAZON_SECRET_ACCESS_KEY env variables are accepted"
+end
+
+unless @options[:volume] && @options[:path]
+  send_error "Missing Arguments: --path and --volume are required"
+end
+
+
+## Setup initializer
+params = {
+  :hostname => @options[:hostname],
+  :aws => {
+    :access_key => @options[:access_key],
+    :secret_key => @options[:secret_key],
+  },
+  :volume => {
+    :volume_id => @options[:volume],
+    :path => @options[:path],
+    :filesystem => @options[:filesystem]
+  }
+}
+params.update(
+  :db => :mysql,
+  :mysql => {
+    :username => @options[:username],
+    :password => @options[:password],
+    :host => @options[:host],
+    :port => @options[:port]
+  }
+) if @options[:database] == :mysql
+
+ebs = EbsSnapshot::Base.new(params)
+ebs.snapshot
+
